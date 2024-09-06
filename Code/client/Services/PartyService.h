@@ -29,6 +29,12 @@ struct PartyService
     const Map<uint32_t, String>& GetPlayers() const noexcept { return m_players; }
     Map<uint32_t, uint64_t>& GetInvitations() noexcept { return m_invitations; }
 
+    /**
+     * Checks if the item ID is in the list of items a party member
+     * should not propagate the pickup/removal of
+     */
+    [[nodiscard]] bool IsDesyncedItem(uint32_t aId) noexcept;
+
     void CreateParty() const noexcept;
     void LeaveParty() const noexcept;
     void CreateInvite(const uint32_t aPlayerId) const noexcept;
@@ -47,6 +53,11 @@ protected:
 
 private:
     void DestroyParty() noexcept;
+
+    // List of item IDs that party members should not propagate their pickup/removal
+    TiltedPhoques::Vector<uint32_t> m_desyncedItems{
+        0x39647, // Golden Claw
+    };
 
     Map<uint32_t, String> m_players;
     Map<uint32_t, uint64_t> m_invitations;

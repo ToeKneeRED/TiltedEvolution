@@ -181,3 +181,10 @@ void PartyService::DestroyParty() noexcept
     m_leaderPlayerId = -1;
     m_partyMembers.clear();
 }
+
+bool PartyService::IsDesyncedItem(uint32_t aId) noexcept
+{
+    const auto itemFound = std::find_if(std::begin(m_desyncedItems), std::end(m_desyncedItems),
+                                        [aId](uint32_t itemId) { return aId == itemId; });
+    return itemFound != m_desyncedItems.end();
+}
