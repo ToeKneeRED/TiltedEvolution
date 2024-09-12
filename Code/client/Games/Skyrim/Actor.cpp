@@ -48,6 +48,7 @@
 #include <Havok/hkbBehaviorGraph.h>
 #include <Forms/BGSOutfit.h>
 #include <Forms/TESObjectARMO.h>
+#include <openssl/tls1.h>
 
 #ifdef SAVE_STUFF
 
@@ -772,7 +773,32 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
 {
     if (!ScopedInventoryOverride::IsOverriden())
     {
-        auto& modSystem = World::Get().GetModSystem();
+        const auto& modSystem = World::Get().GetModSystem();
+        const auto& inventoryService = World::Get().GetInventoryService();
+
+        bool isDesyncedItem = inventoryService.IsDesyncedItem(apItem->formID);
+        bool isLocalPlayer = Cast<Actor>(PlayerCharacter::Get()) == apThis;
+        bool isLeader = World::Get().GetPartyService().IsLeader();
+        bool leaderGotItem = isLeader && isLocalPlayer;
+
+        TESBoundObject* pObject = Cast<TESBoundObject>(TESForm::GetById(apItem->formID));
+
+        if (pObject && (isDesyncedItem && !leaderGotItem)) // if party member picks up a desynced item
+        {
+            World::Get().GetOverlayService()
+                .SendSystemMessage("The party leader must pick up " + std::string(pObject->GetName()));
+
+            PlayerCharacter::Get()->RemoveItem(apItem, aCount, ITEM_REMOVE_REASON::kRemove, apExtraData, nullptr);
+
+            //Utils::Test("this is a test");
+
+            return;
+        }
+        else if (pObject && (leaderGotItem && isDesyncedItem))
+        {
+            World::Get().GetOverlayService()
+                .SendSystemMessage("Picked up " + std::string(pObject->GetName()));
+        }
 
         Inventory::Entry item{};
         modSystem.GetServerModId(apItem->formID, item.BaseId);
@@ -782,6 +808,7 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
             apThis->GetItemFromExtraData(item, apExtraData);
 
         World::Get().GetRunner().Trigger(InventoryChangeEvent(apThis->formID, std::move(item)));
+        spdlog::info("Inventory changed event: {}", apItem->GetName());
     }
 
     TiltedPhoques::ThisCall(RealAddInventoryItem, apThis, apItem, apExtraData, aCount, apOldOwner);

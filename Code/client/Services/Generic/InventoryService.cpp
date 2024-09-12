@@ -55,6 +55,10 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     if (!m_transport.IsConnected())
         return;
 
+    // Don't send inventory change request if party member picks up desynced item
+    if (!CanSendInventoryChangeRequest(acEvent))
+        return;
+
     auto view = m_world.view<FormIdComponent>();
 
     const auto iter = std::find_if(std::begin(view), std::end(view), [view, formId = acEvent.FormId](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
@@ -331,4 +335,73 @@ void InventoryService::RunNakedNPCBugChecks() noexcept
         pActor->ResetInventory(false);
     }
 #endif
+}
+
+
+bool InventoryService::CanSendInventoryChangeRequest(const InventoryChangeEvent& acEvent) const noexcept
+{
+    if (TESBoundObject* pObject = Cast<TESBoundObject>(TESForm::GetById(acEvent.Item.BaseId.BaseId)))
+    {
+        auto asdf = TESForm::GetById(acEvent.Item.BaseId.BaseId);
+
+        std::string temp = "";
+        switch (asdf->GetFormType())
+        {
+        case FormType::Armor:
+            temp = "Armor";
+            break;
+        case FormType::Book:
+            temp = "Book";
+            break;
+        case FormType::Container:
+            temp = "Container";
+            break;
+        case FormType::Door:
+            temp = "Door";
+            break;
+        case FormType::Ingredient:
+            temp = "Ingredient";
+            break;
+        case FormType::Weapon:
+            temp = "Weapon";
+            break;
+        case FormType::Ammo:
+            temp = "Ammo";
+            break;
+        case FormType::Npc:
+            temp = "Npc";
+            break;
+        case FormType::LeveledCharacter:
+            temp = "LeveledCharacter";
+            break;
+        case FormType::Alchemy:
+            temp = "Alchemy";
+            break;
+        case FormType::LeveledItem:
+            temp = "LeveledItem";
+            break;
+        case FormType::Character:
+            temp = "Character";
+            break;
+        case FormType::QuestItem:
+            temp = "QuestItem";
+            break;
+        case FormType::Count:
+            temp = "Count";
+            break;
+        }
+
+        spdlog::info("Item: {} | formType: {}", pObject->GetName(), temp);
+
+        uint8_t itemFlags = GetItemDesyncFlags(pObject->formID);
+
+        spdlog::info("[ItemDesync::Flags] kAdd: {} | kRemove: {}", (itemFlags & ItemDesync::kAdd) != 0,
+                     (itemFlags & ItemDesync::kRemove) != 0);
+
+        // If item has kAdd or kRemove flags and are not party leader, dont send inventory change request
+        if ((itemFlags & (ItemDesync::kAdd | ItemDesync::kRemove)) != 0 && !World::Get().GetPartyService().IsLeader())
+            return false;
+    }
+
+    return true;
 }

@@ -1,3 +1,4 @@
+
 #include <Services/PartyService.h>
 
 #include <Services/TransportService.h>
@@ -35,6 +36,8 @@ PartyService::PartyService(World& aWorld, entt::dispatcher& aDispatcher, Transpo
     m_partyInviteConnection = aDispatcher.sink<NotifyPartyInvite>().connect<&PartyService::OnPartyInvite>(this);
     m_partyJoinedConnection = aDispatcher.sink<NotifyPartyJoined>().connect<&PartyService::OnPartyJoined>(this);
     m_partyLeftConnection = aDispatcher.sink<NotifyPartyLeft>().connect<&PartyService::OnPartyLeft>(this);
+
+    //m_desyncedItems[0x39647] = static_cast<uint8_t>(ItemDesync::kAdd | ItemDesync::kRemove); // Golden Claw
 }
 
 void PartyService::CreateParty() const noexcept
@@ -180,11 +183,4 @@ void PartyService::DestroyParty() noexcept
     m_isLeader = false;
     m_leaderPlayerId = -1;
     m_partyMembers.clear();
-}
-
-bool PartyService::IsDesyncedItem(uint32_t aId) noexcept
-{
-    const auto itemFound = std::find_if(std::begin(m_desyncedItems), std::end(m_desyncedItems),
-                                        [aId](uint32_t itemId) { return aId == itemId; });
-    return itemFound != m_desyncedItems.end();
 }

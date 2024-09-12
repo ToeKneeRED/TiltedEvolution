@@ -1,4 +1,6 @@
 #pragma once
+#include "Events/InventoryChangeEvent.h"
+#include "Structs/ItemDesync.h"
 
 struct World;
 struct ImguiService;
@@ -10,6 +12,7 @@ struct NotifyPartyInfo;
 struct NotifyPartyInvite;
 struct NotifyPartyJoined;
 struct NotifyPartyLeft;
+struct InventoryChangeEvent;
 
 /**
  * @brief Manages the party of the local player.
@@ -29,11 +32,9 @@ struct PartyService
     const Map<uint32_t, String>& GetPlayers() const noexcept { return m_players; }
     Map<uint32_t, uint64_t>& GetInvitations() noexcept { return m_invitations; }
 
-    /**
-     * Checks if the item ID is in the list of items a party member
-     * should not propagate the pickup/removal of
-     */
-    [[nodiscard]] bool IsDesyncedItem(uint32_t aId) noexcept;
+    [[nodiscard]] bool CanSendInventoryChangeRequest(const InventoryChangeEvent& acEvent) const noexcept;
+    [[nodiscard]] bool IsDesyncedItem(uint32_t aId) const noexcept { return m_desyncedItems.find(aId) != m_desyncedItems.end(); }
+    uint8_t GetItemDesyncFlags(uint32_t aId) const noexcept {return !IsDesyncedItem(aId) ? ItemDesync::kNone : m_desyncedItems.find(aId)->second; }
 
     void CreateParty() const noexcept;
     void LeaveParty() const noexcept;
@@ -54,9 +55,11 @@ protected:
 private:
     void DestroyParty() noexcept;
 
-    // List of item IDs that party members should not propagate their pickup/removal
-    TiltedPhoques::Vector<uint32_t> m_desyncedItems{
-        0x39647, // Golden Claw
+    // item ID, desynced item event flags
+    Map<uint32_t, uint8_t> m_desyncedItems
+    {
+        std::pair<uint32_t, uint8_t>(0x39647, static_cast<uint8_t>(ItemDesync::kAdd | ItemDesync::kRemove)), // Golden Claw
+
     };
 
     Map<uint32_t, String> m_players;

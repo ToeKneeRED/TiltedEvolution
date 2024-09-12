@@ -492,40 +492,8 @@ void TESObjectREFR::AddOrRemoveItem(const Inventory::Entry& arEntry, bool aIsSet
     }
     else if (arEntry.Count < 0)
     {
-        spdlog::debug("Removing item {:X}, count {}", pObject->formID, -arEntry.Count);
-
-        // Don't propagate certain item pickups/removals from party members (like quest items)
-        // If it is not a desynced item or is a desynced item but are the party leader,
-        // then propagate the pickup/removal
-        bool isDesyncedItem = World::Get().GetPartyService().IsDesyncedItem(arEntry.BaseId.BaseId);
-        bool isLeader = World::Get().GetPartyService().GetLeaderPlayerId() != World::Get().GetTransport().GetLocalPlayerId(); // ????
-        const bool shouldPropagateItemRemove = !isDesyncedItem || (isDesyncedItem && !isLeader);
-        if (shouldPropagateItemRemove)
-        {
-            if (!isLeader)
-            {
-                std::string name = pObject->GetName();
-                std::string other = "The party leader should pick up ";
-                String out = (other + name).c_str(); // ew
-                Utils::ShowHudMessage(out);
-                World::Get().GetOverlayService().SendSystemMessage(other + name);
-            }
-            else
-            {
-                spdlog::info("ITEM REMOVED: {}, ID: {:X}, IS QUEST ITEM?: {}", pObject->GetName(), arEntry.BaseId.BaseId, arEntry.IsQuestItem);
-                RemoveItem(pObject, -arEntry.Count, ITEM_REMOVE_REASON::kRemove, pExtraDataList, nullptr);
-
-                std::string name = pObject->GetName();
-                std::string other = " was picked up";
-                String out = (name + other).c_str(); // ew
-                Utils::ShowHudMessage(out);
-                World::Get().GetOverlayService().SendSystemMessage(name + other);
-            }
-        }
-        else
-        {
-            spdlog::info("DESYNCED ITEM WAS ATTEMPTED TO BE REMOVED: {} | {:X}", pObject->GetName(), arEntry.BaseId.BaseId);
-        }
+            spdlog::debug("Removing item {:X}, count {}", pObject->formID, -arEntry.Count);
+            RemoveItem(pObject, -arEntry.Count, ITEM_REMOVE_REASON::kRemove, pExtraDataList, nullptr);
     }
 
     // TODO(cosideci): this is still flawed. Adding the refr to the quest leader is hard.

@@ -50,6 +50,19 @@ struct InventoryService
      */
     void OnNotifyEquipmentChanges(const NotifyEquipmentChanges& acMessage) noexcept;
 
+    /**
+     * @brief Check
+     */
+    [[nodiscard]] bool CanSendInventoryChangeRequest(const InventoryChangeEvent& acEvent) const noexcept;
+    [[nodiscard]] bool IsDesyncedItem(uint32_t aId) const noexcept
+    {
+        return m_desyncedItems.find(aId) != m_desyncedItems.end();
+    }
+    uint8_t GetItemDesyncFlags(uint32_t aId) const noexcept
+    {
+        return !IsDesyncedItem(aId) ? ItemDesync::kNone : m_desyncedItems.find(aId)->second;
+    }
+
 private:
     /**
      * Checks whether local actors their weapon draw states have changed,
@@ -61,6 +74,12 @@ private:
     * and resets their inventory.
     */
     void RunNakedNPCBugChecks() noexcept;
+
+    // item ID, desynced item event flags
+    Map<uint32_t, uint8_t> m_desyncedItems{
+        std::pair<uint32_t, uint8_t>(0x39647, static_cast<uint8_t>(ItemDesync::kAdd | ItemDesync::kRemove)), // Golden Claw
+
+    };
 
     World& m_world;
     entt::dispatcher& m_dispatcher;
