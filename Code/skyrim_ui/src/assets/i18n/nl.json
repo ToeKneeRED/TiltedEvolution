@@ -18,6 +18,7 @@
       "CONNECT": "Verbinden",
       "CANCEL": "Annuleren",
       "PUBLIC_SERVERS": "Openbare servers",
+      "START_SERVER": "Server starten",
       "ERROR": {
         "CONNECTION": "Kan niet verbinden met de desbetreffende server. Wees er zeker van dat je het juiste adres hebt ingevuld en dat je geen netwerkproblemen ondervind.",
         "VERSION_MISMATCH": "Kan niet verbinden met de desbetreffende server omdat het niet dezelfde versie heeft van Skyrim Together als jij.",

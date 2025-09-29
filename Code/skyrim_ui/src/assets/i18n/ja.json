@@ -17,6 +17,7 @@
       "CONNECT": "接続",
       "CANCEL": "キャンセル",
       "PUBLIC_SERVERS": "公開サーバー",
+      "START_SERVER": "サーバーを起動",
       "ERROR": {
         "CONNECTION": "接続できませんでした。 IPアドレスとネットワークの安定を確認してから再度お試しください。",
         "VERSION_MISMATCH": "サーバーの「Skyrim Together」バージョンが違う為、接続することができません。",

@@ -18,6 +18,7 @@
       "CONNECT": "连接",
       "CANCEL": "取消",
       "PUBLIC_SERVERS": "公开服务器",
+      "START_SERVER": "启动服务器",
       "ERROR": {
         "CONNECTION": "无法连接至指定的服务器。请确认输入了正确的地址，且没有网络问题。",
         "VERSION_MISMATCH": "无法连接至服务器。服务器的Skyrim Together版本与您的不同。",

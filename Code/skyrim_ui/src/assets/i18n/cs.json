@@ -17,6 +17,7 @@
       "CONNECT": "Připojit",
       "CANCEL": "Zrušit",
       "PUBLIC_SERVERS": "Veřejné servery",
+      "START_SERVER": "Spustit Server",
       "ERROR": {
         "CONNECTION": "Nepodařilo se připojit k zadanému serveru. Ujistěte se, že jste zadali správnou adresu a že nemáte problémy se sítí.",
         "VERSION_MISMATCH": "Nelze se připojit k serveru, protože nemáte stejnou verzi Skyrim Together.",

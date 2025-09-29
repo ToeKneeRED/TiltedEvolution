@@ -18,6 +18,7 @@
       "CONNECT": "Conectar",
       "CANCEL": "Cancelar",
       "PUBLIC_SERVERS": "Servidores públicos",
+      "START_SERVER": "Iniciar servidor",
       "ERROR": {
         "CONNECTION": "No se ha podido conectar con el servidor especificado. Asegúrate de haber introducido la dirección correctamente y de no tener problemas de conexión.",
         "VERSION_MISMATCH": "No puedes conectarte al servidor ya que no posees la misma versión de Skyrim Together que el servidor.",

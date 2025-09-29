@@ -18,6 +18,7 @@
       "CONNECT": "połącz",
       "CANCEL": "Anuluj",
       "PUBLIC_SERVERS": "Serwery Publiczne",
+      "START_SERVER": "Uruchom Serwer",
       "ERROR": {
         "CONNECTION": "Nie można było cię połączyć to danego serwera. Upewnij się, że wpisałeś poprawny adres i że nie spotykają cię żadnę problemy z twoją siecią",
         "VERSION_MISMATCH": "Nie można było cię połączyć do danego serwera, ponieważ nie jest na tej samej wersji Skyrima Together co ty.",

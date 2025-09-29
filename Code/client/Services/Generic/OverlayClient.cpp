@@ -80,6 +80,8 @@ bool OverlayClient::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefR
             ProcessTeleportMessage(eventArgs);
         else if (eventName == "toggleDebugUI")
             ProcessToggleDebugUI();
+        else if (eventName == "startServer")
+            ProcessStartServerMessage(eventArgs);
 
         return true;
     }
@@ -127,6 +129,32 @@ void OverlayClient::ProcessChatMessage(CefRefPtr<CefListValue> aEventArgs)
 
         m_transport.Send(messageRequest);
     }
+}
+
+void OverlayClient::ProcessStartServerMessage(CefRefPtr<CefListValue> aEventArgs)
+{
+    const std::string cPassword = aEventArgs->GetString(1).ToString();
+
+    STARTUPINFOW startupInfo{};
+    PROCESS_INFORMATION processInfo{};
+
+    startupInfo.cb = sizeof(startupInfo);
+
+    const std::wstring cServerPath = TiltedPhoques::GetPath().wstring() + L"\\SkyrimTogetherServer.exe";
+
+    if (CreateProcessW(cServerPath.c_str(), nullptr, nullptr, nullptr, false, CREATE_NEW_CONSOLE, nullptr, nullptr, &startupInfo, &processInfo))
+    {
+        m_transport.SetServerPassword(cPassword);
+        m_transport.Connect("127.0.0.1");
+
+        spdlog::info("Server started with PID {}\t{}", processInfo.dwProcessId, cPassword.c_str());
+    } else
+    {
+        spdlog::error(L"Could not start server at: {}", cServerPath.c_str());
+    }
+
+    CloseHandle(processInfo.hProcess);
+    CloseHandle(processInfo.hThread);
 }
 
 void OverlayClient::ProcessSetTimeCommand(CefRefPtr<CefListValue> aEventArgs)

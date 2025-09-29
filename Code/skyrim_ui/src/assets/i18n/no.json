@@ -17,6 +17,7 @@
       "CONNECT": "Koblte til",
       "CANCEL": "Avbryt",
       "PUBLIC_SERVERS": "Offentlige servere",
+      "START_SERVER": "Start server",
       "ERROR": {
         "CONNECTION": "Kunne ikke koble til den valgte serveren. Forsikre deg om at du har skrevet inn den rette nettaddressen og at du har netttilgang.",
         "VERSION_MISMATCH": "Du kan kun koble til servere som kjører samme version av Skyrim Together som deg.",

@@ -216,6 +216,10 @@ export class ClientService implements OnDestroy {
     skyrimtogether.revealPlayers();
   }
 
+  public startServer(password: string): void {
+    skyrimtogether.startServer(password);
+  }
+
   /**
    * Launch a party.
    */

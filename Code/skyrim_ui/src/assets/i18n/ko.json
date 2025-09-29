@@ -17,6 +17,7 @@
       "CONNECT": "연결",
       "CANCEL": "취소",
       "PUBLIC_SERVERS": "공개 서버",
+      "START_SERVER": "서버 시작",
       "ERROR": {
         "CONNECTION": "지정된 서버에 연결할 수 없습니다. 올바른 주소를 입력했는지, 네트워크 문제가 발생하고 있지 않은지 확인하세요",
         "VERSION_MISMATCH": "귀하와 동일한 버전의 Skyrim Together가 없기 때문에 서버에 연결할 수 없습니다.",

@@ -25,6 +25,7 @@ private:
     void ProcessConnectMessage(CefRefPtr<CefListValue> aEventArgs);
     void ProcessDisconnectMessage();
     void ProcessRevealPlayersMessage();
+    void ProcessStartServerMessage(CefRefPtr<CefListValue> aEventArgs);
     void ProcessChatMessage(CefRefPtr<CefListValue> aEventArgs);
     void ProcessSetTimeCommand(CefRefPtr<CefListValue> aEventArgs);
     void ProcessTeleportMessage(CefRefPtr<CefListValue> aEventArgs);

@@ -369,6 +369,13 @@ interface SkyrimTogether {
   revealPlayers(): void;
 
   /**
+   * Start the server.
+   * 
+   * @param password Server password
+   */
+  startServer(password: string): void;
+
+  /**
    * Send message to server.
    */
   sendMessage(type: number, message: string): void;

@@ -234,20 +234,59 @@ void DebugService::DrawServerView() noexcept
 
     static char s_address[1024] = "127.0.0.1:10578";
     static char s_password[1024] = "";
-    ImGui::InputText("Address", s_address, std::size(s_address));
-    ImGui::InputText("Password", s_password, std::size(s_password));
 
-    if (m_transport.IsOnline())
+    if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
     {
-        if (ImGui::Button("Disconnect"))
-            m_transport.Close();
-    }
-    else
-    {
-        if (ImGui::Button("Connect"))
+        if (ImGui::BeginTabItem("Connect"))
         {
-            m_transport.SetServerPassword(s_password);
-            m_transport.Connect(s_address);
+            ImGui::InputText("Address", s_address, std::size(s_address));
+            ImGui::InputText("Password", s_password, std::size(s_password));
+
+            if (m_transport.IsOnline())
+            {
+                if (ImGui::Button("Disconnect"))
+                    m_transport.Close();
+            }
+            else
+            {
+                if (ImGui::Button("Connect"))
+                {
+                    m_transport.SetServerPassword(s_password);
+                    m_transport.Connect(s_address);
+                }
+            }
+
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Host"))
+        {
+            ImGui::InputText("Password", s_password, std::size(s_password));
+            if (ImGui::Button("Start Server"))
+            {
+                STARTUPINFOW startupInfo;
+                PROCESS_INFORMATION processInfo;
+
+                startupInfo.cb = sizeof(startupInfo);
+
+                const std::wstring serverPath = TiltedPhoques::GetPath().wstring() + L"\\SkyrimTogetherServer.exe";
+
+                if (CreateProcessW(serverPath.c_str(), nullptr, nullptr, nullptr, false, CREATE_NEW_CONSOLE, nullptr, nullptr, &startupInfo, &processInfo))
+                {
+                    m_transport.SetServerPassword(s_password);
+                    m_transport.Connect(s_address);
+
+                    spdlog::info("Server started with PID {}", processInfo.dwProcessId);
+                } else
+                {
+                    spdlog::error(L"Could not start server at: {}", serverPath.c_str());
+                }
+
+                CloseHandle(processInfo.hProcess);
+                CloseHandle(processInfo.hThread);
+            }
+            
+            ImGui::EndTabItem();
         }
     }
 

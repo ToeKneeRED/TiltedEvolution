@@ -19,6 +19,7 @@
       "CONNECT": "Bağlan",
       "CANCEL": "İptal",
       "PUBLIC_SERVERS": "Herkese Açık Sunucular",
+      "START_SERVER": "Sunucuyu Başlat",
       "ERROR": {
         "CONNECTION": "Belirtilen sunucuya bağlanılamadı. Lütfen doğru adresi girdiğinize ve bağlantı sorununuzun olmadığına emin olun.",
         "VERSION_MISMATCH": "Sunucuya bağlanamazsınız çünkü aynı Skyrim Together versiyonlarına sahip değilsiniz.",
