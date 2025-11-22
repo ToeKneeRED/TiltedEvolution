@@ -79,9 +79,6 @@ export class ConnectComponent implements OnDestroy, AfterViewInit {
   }
 
   public ngAfterViewInit(): void {
-    setTimeout(() => {
-      this.focus();
-    }, 100);
   }
 
   public ngOnDestroy(): void {
