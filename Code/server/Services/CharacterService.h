@@ -8,6 +8,7 @@ struct CharacterInteriorCellChangeEvent;
 struct CharacterSpawnedEvent;
 struct World;
 struct AssignCharacterRequest;
+struct AssignCharacterResponse;
 struct CharacterSpawnRequest;
 struct ClientReferencesMoveRequest;
 struct RequestFactionsChanges;
@@ -23,6 +24,7 @@ struct RequestRespawn;
 struct SyncExperienceRequest;
 struct DialogueRequest;
 struct SubtitleRequest;
+struct Player;
 
 /**
  * @brief Manages player and actor state.
@@ -56,10 +58,11 @@ protected:
     void OnSubtitleRequest(const PacketEvent<SubtitleRequest>& acMessage) const noexcept;
 
     void CreateCharacter(const PacketEvent<AssignCharacterRequest>& acMessage) const noexcept;
-    void TransferOwnership(Player* apPlayer, const uint32_t acServerId, const ActorData& acActorData) const noexcept;
+    void PopulateAssignmentResponse(entt::entity aEntity, AssignCharacterResponse& aResponse) const noexcept;
+    bool CanClaimOwnership(Player* apPlayer, entt::entity aEntity, uint32_t aExpectedOwnershipEpoch, const char* apContext) const noexcept;
+    bool TransferOwnership(Player* apPlayer, entt::entity aEntity, const char* apReason, bool aResetInvalidOwners = true) const noexcept;
+    void TransferToNextOwner(entt::entity aEntity, const char* apReason) const noexcept;
     ActorData BuildActorData(const entt::entity acEntity) const noexcept;
-    void ApplyActorData(const entt::entity acEntity, const ActorData& acActorData) const noexcept;
-    void BroadcastActorData(Player* apPlayer, const entt::entity acEntity, const ActorData& acActorData) const noexcept;
 
     void ProcessFactionsChanges() const noexcept;
     void ProcessMovementChanges() const noexcept;

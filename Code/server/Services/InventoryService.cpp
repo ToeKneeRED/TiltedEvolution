@@ -33,20 +33,62 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
 
     const auto it = view.find(static_cast<entt::entity>(message.ServerId));
 
-    if (it != view.end())
+    if (it == view.end())
     {
-        auto& inventoryComponent = view.get<InventoryComponent>(*it);
-        inventoryComponent.Content.AddOrRemoveEntry(message.Item);
+        spdlog::debug("inventory_mutation_rejected reason=missing_entity player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        return;
     }
 
-    if (!message.UpdateClients)
+    bool isRemoteCorpseInteraction = false;
+
+    const auto* pOwnerComponent = m_world.try_get<OwnerComponent>(*it);
+    if (pOwnerComponent)
+    {
+        const auto* pOwner = pOwnerComponent->GetOwner();
+        if (pOwnerComponent->OwnershipEpoch != message.OwnershipEpoch)
+        {
+            const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
+            spdlog::debug(
+                "inventory_mutation_rejected reason=stale_epoch player={:X} server_id={:X} requested_epoch={} owner={:X} current_epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+            return;
+        }
+
+        if (pOwner != acMessage.pPlayer)
+        {
+            const auto* pCharacterComponent = m_world.try_get<CharacterComponent>(*it);
+            const auto* pCellComponent = m_world.try_get<CellIdComponent>(*it);
+            isRemoteCorpseInteraction = pOwner && pCharacterComponent && pCellComponent && pCharacterComponent->IsDead() && !pCharacterComponent->IsPlayer()
+                && acMessage.pPlayer->GetCellComponent().IsInRange(*pCellComponent, pCharacterComponent->IsDragon());
+
+            if (!isRemoteCorpseInteraction)
+            {
+                const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
+                spdlog::debug(
+                    "inventory_mutation_rejected reason=non_owner player={:X} server_id={:X} epoch={} owner={:X}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId);
+                return;
+            }
+
+            spdlog::debug("inventory_mutation_accepted source=remote_corpse player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        }
+    }
+    else if (message.OwnershipEpoch != 0)
+    {
+        spdlog::debug("inventory_mutation_rejected reason=non_actor_epoch player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        return;
+    }
+
+    auto& inventoryComponent = view.get<InventoryComponent>(*it);
+    inventoryComponent.Content.AddOrRemoveEntry(message.Item);
+
+    if (!message.UpdateClients && !isRemoteCorpseInteraction)
         return;
 
     NotifyInventoryChanges notify;
     notify.ServerId = message.ServerId;
+    notify.OwnershipEpoch = message.OwnershipEpoch;
     notify.Item = message.Item;
 
-    notify.Drop = bEnableItemDrops ? message.Drop : false;
+    notify.Drop = bEnableItemDrops && !isRemoteCorpseInteraction ? message.Drop : false;
 
     const entt::entity cOrigin = static_cast<entt::entity>(message.ServerId);
     if (!GameServer::Get()->SendToPlayersInRange(notify, cOrigin, acMessage.GetSender()))
@@ -61,14 +103,35 @@ void InventoryService::OnEquipmentChanges(const PacketEvent<RequestEquipmentChan
 
     const auto it = view.find(static_cast<entt::entity>(message.ServerId));
 
-    if (it != view.end())
+    if (it == view.end())
     {
-        auto& inventoryComponent = view.get<InventoryComponent>(*it);
-        inventoryComponent.Content.UpdateEquipment(message.CurrentInventory);
+        spdlog::debug("equipment_mutation_rejected reason=missing_entity player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        return;
     }
+
+    const auto* pOwnerComponent = m_world.try_get<OwnerComponent>(*it);
+    if (pOwnerComponent)
+    {
+        if (pOwnerComponent->GetOwner() != acMessage.pPlayer || pOwnerComponent->OwnershipEpoch != message.OwnershipEpoch)
+        {
+            const uint32_t ownerId = pOwnerComponent->GetOwner() ? pOwnerComponent->GetOwner()->GetId() : 0;
+            spdlog::debug(
+                "equipment_mutation_rejected reason=stale_or_non_owner player={:X} server_id={:X} requested_epoch={} owner={:X} current_epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+            return;
+        }
+    }
+    else if (message.OwnershipEpoch != 0)
+    {
+        spdlog::debug("equipment_mutation_rejected reason=non_actor_epoch player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        return;
+    }
+
+    auto& inventoryComponent = view.get<InventoryComponent>(*it);
+    inventoryComponent.Content.UpdateEquipment(message.CurrentInventory);
 
     NotifyEquipmentChanges notify;
     notify.ServerId = message.ServerId;
+    notify.OwnershipEpoch = message.OwnershipEpoch;
     notify.ItemId = message.ItemId;
     notify.EquipSlotId = message.EquipSlotId;
     notify.Count = message.Count;
