@@ -52,10 +52,7 @@ void QueueEquipmentChange(Actor* apActor, EquipmentChangeEvent aEvent)
 {
     const auto ownershipToken = Utils::GetLocalOwnershipToken(apActor->formID);
     if (!ownershipToken)
-    {
-        spdlog::debug("equipment_event_not_queued reason=no_local_ownership actor_form_id={:X}", apActor->formID);
         return;
-    }
 
     aEvent.ServerId = ownershipToken->ServerId;
     aEvent.OwnershipEpoch = ownershipToken->OwnershipEpoch;

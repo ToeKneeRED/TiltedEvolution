@@ -51,10 +51,7 @@ void QueueReferenceInventoryChange(TESObjectREFR* apReference, InventoryChangeEv
         }
 
         if (!ownershipToken)
-        {
-            spdlog::debug("inventory_event_not_queued reason=no_local_ownership actor_form_id={:X}", pActor->formID);
             return;
-        }
 
         aEvent.ServerId = ownershipToken->ServerId;
         aEvent.OwnershipEpoch = ownershipToken->OwnershipEpoch;

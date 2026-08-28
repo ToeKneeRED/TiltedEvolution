@@ -207,7 +207,7 @@ void CharacterService::OnAssignCharacterRequest(const PacketEvent<AssignCharacte
 
             auto& ownerComponent = view.get<OwnerComponent>(*itor);
             const bool isOwner = ownerComponent.GetOwner() == acMessage.pPlayer;
-            const bool transferToLeader = !isOwner && CanClaimOwnership(acMessage.pPlayer, *itor, ownerComponent.OwnershipEpoch, "leader_assignment");
+            const bool transferToLeader = !isOwner && CanClaimOwnership(acMessage.pPlayer, *itor, ownerComponent.OwnershipEpoch, OwnershipTransferReason::LeaderAssignment);
 
             AssignCharacterResponse response{};
             response.Cookie = message.Cookie;
@@ -217,7 +217,7 @@ void CharacterService::OnAssignCharacterRequest(const PacketEvent<AssignCharacte
 
             // The assignment response establishes a remote component before the grant arrives.
             if (transferToLeader)
-                TransferOwnership(acMessage.pPlayer, *itor, "leader_assignment");
+                TransferOwnership(acMessage.pPlayer, *itor, OwnershipTransferReason::LeaderAssignment);
 
             return;
         }
@@ -236,7 +236,7 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
     const auto it = view.find(cEntity);
     if (it == view.end())
     {
-        spdlog::debug("ownership_relinquish_rejected reason=missing_entity player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        spdlog::debug("Ignored ownership release from player {:X} for missing actor {:X}", acMessage.pPlayer->GetId(), message.ServerId);
         return;
     }
 
@@ -245,14 +245,15 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
     {
         const uint32_t ownerId = ownerComponent.GetOwner() ? ownerComponent.GetOwner()->GetId() : 0;
         spdlog::debug(
-            "ownership_relinquish_rejected reason=stale_or_non_owner player={:X} server_id={:X} requested_epoch={} owner={:X} current_epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, ownerComponent.OwnershipEpoch);
+            "Ignored ownership release from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}",
+            acMessage.pPlayer->GetId(), message.ServerId, ownerId, message.OwnershipEpoch, ownerComponent.OwnershipEpoch);
         return;
     }
 
     auto& characterComponent = view.get<CharacterComponent>(*it);
     if (characterComponent.IsPlayerSummon())
     {
-        spdlog::info("ownership_relinquish reason=orphaned_summon player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        spdlog::info("Removing summon {:X} after player {:X} relinquished ownership", message.ServerId, acMessage.pPlayer->GetId());
         m_world.GetDispatcher().trigger(CharacterRemoveEvent(message.ServerId));
         return;
     }
@@ -283,12 +284,12 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
 
     ownerComponent.InvalidOwners.push_back(acMessage.pPlayer);
 
-    TransferToNextOwner(cEntity, "relinquish");
+    TransferToNextOwner(cEntity, OwnershipTransferReason::Relinquish);
 }
 
 void CharacterService::OnOwnershipTransferEvent(const OwnershipTransferEvent& acEvent) const noexcept
 {
-    TransferToNextOwner(acEvent.Entity, "owner_unavailable");
+    TransferToNextOwner(acEvent.Entity, OwnershipTransferReason::OwnerUnavailable);
 }
 
 void CharacterService::OnCharacterRemoveEvent(const CharacterRemoveEvent& acEvent) const noexcept
@@ -315,10 +316,10 @@ void CharacterService::OnOwnershipClaimRequest(const PacketEvent<RequestOwnershi
     const auto& message = acMessage.Packet;
     const entt::entity cEntity = static_cast<entt::entity>(message.ServerId);
 
-    if (!CanClaimOwnership(acMessage.pPlayer, cEntity, message.ExpectedOwnershipEpoch, "leader_claim"))
+    if (!CanClaimOwnership(acMessage.pPlayer, cEntity, message.ExpectedOwnershipEpoch, OwnershipTransferReason::LeaderClaim))
         return;
 
-    TransferOwnership(acMessage.pPlayer, cEntity, "leader_claim");
+    TransferOwnership(acMessage.pPlayer, cEntity, OwnershipTransferReason::LeaderClaim);
 }
 
 void CharacterService::OnCharacterSpawned(const CharacterSpawnedEvent& acEvent) const noexcept
@@ -417,13 +418,13 @@ void CharacterService::OnMountRequest(const PacketEvent<MountRequest>& acMessage
 
     if (riderIt == view.end() || mountIt == view.end() || cRiderEntity == cMountEntity)
     {
-        spdlog::debug("mount_rejected reason=missing_or_invalid_entity player={:X} rider={:X} mount={:X}", acMessage.pPlayer->GetId(), message.RiderId, message.MountId);
+        spdlog::debug("Rejected mount request from player {:X} because rider {:X} or mount {:X} is invalid", acMessage.pPlayer->GetId(), message.RiderId, message.MountId);
         return;
     }
 
     if (!view.get<CharacterComponent>(*mountIt).IsMount())
     {
-        spdlog::debug("mount_rejected reason=target_not_mount player={:X} rider={:X} mount={:X}", acMessage.pPlayer->GetId(), message.RiderId, message.MountId);
+        spdlog::warn("Rejected mount request from player {:X} because actor {:X} is not a mount", acMessage.pPlayer->GetId(), message.MountId);
         return;
     }
 
@@ -432,19 +433,20 @@ void CharacterService::OnMountRequest(const PacketEvent<MountRequest>& acMessage
     if (riderOwner.GetOwner() != acMessage.pPlayer || riderOwner.OwnershipEpoch != message.RiderOwnershipEpoch || mountOwner.OwnershipEpoch != message.MountOwnershipEpoch)
     {
         spdlog::debug(
-            "mount_rejected reason=stale_or_non_owner player={:X} rider={:X} rider_epoch={}/{} mount={:X} mount_epoch={}/{}", acMessage.pPlayer->GetId(), message.RiderId, message.RiderOwnershipEpoch, riderOwner.OwnershipEpoch, message.MountId, message.MountOwnershipEpoch,
-            mountOwner.OwnershipEpoch);
+            "Rejected stale mount request from player {:X} for rider {:X} at epoch {} and mount {:X} at epoch {}; current epochs are {} and {}",
+            acMessage.pPlayer->GetId(), message.RiderId, message.RiderOwnershipEpoch, message.MountId, message.MountOwnershipEpoch,
+            riderOwner.OwnershipEpoch, mountOwner.OwnershipEpoch);
         return;
     }
 
     const auto& mountCell = view.get<CellIdComponent>(*mountIt);
     if (!acMessage.pPlayer->GetCellComponent().IsInRange(mountCell, view.get<CharacterComponent>(*mountIt).IsDragon()))
     {
-        spdlog::debug("mount_rejected reason=out_of_range player={:X} rider={:X} mount={:X}", acMessage.pPlayer->GetId(), message.RiderId, message.MountId);
+        spdlog::debug("Rejected mount request from player {:X} because mount {:X} is out of range", acMessage.pPlayer->GetId(), message.MountId);
         return;
     }
 
-    if (!TransferOwnership(acMessage.pPlayer, *mountIt, "mount"))
+    if (!TransferOwnership(acMessage.pPlayer, *mountIt, OwnershipTransferReason::Mount))
         return;
 
     NotifyMount notify;
@@ -666,14 +668,34 @@ void CharacterService::PopulateAssignmentResponse(const entt::entity aEntity, As
         aResponse.ActionsToReplay = pAnimationComponent->ActionsReplayCache.FormRefinedReplayChain();
 }
 
-bool CharacterService::CanClaimOwnership(Player* apPlayer, const entt::entity aEntity, const uint32_t aExpectedOwnershipEpoch, const char* apContext) const noexcept
+const char* CharacterService::GetOwnershipTransferReasonName(const OwnershipTransferReason aReason) noexcept
+{
+    switch (aReason)
+    {
+    case OwnershipTransferReason::LeaderAssignment:
+        return "party leader assignment";
+    case OwnershipTransferReason::LeaderClaim:
+        return "party leader claim";
+    case OwnershipTransferReason::Mount:
+        return "mounting";
+    case OwnershipTransferReason::Relinquish:
+        return "owner relinquished control";
+    case OwnershipTransferReason::OwnerUnavailable:
+        return "owner became unavailable";
+    }
+
+    return "unknown reason";
+}
+
+bool CharacterService::CanClaimOwnership(Player* apPlayer, const entt::entity aEntity, const uint32_t aExpectedOwnershipEpoch, const OwnershipTransferReason aReason) const noexcept
 {
     const uint32_t serverId = World::ToInteger(aEntity);
+    const char* pReasonName = GetOwnershipTransferReasonName(aReason);
     const auto view = m_world.view<OwnerComponent, CharacterComponent, CellIdComponent, FormIdComponent>();
     const auto it = view.find(aEntity);
     if (it == view.end())
     {
-        spdlog::debug("ownership_claim_rejected context={} reason=missing_or_temporary player={:X} server_id={:X} expected_epoch={}", apContext, apPlayer->GetId(), serverId, aExpectedOwnershipEpoch);
+        spdlog::debug("Rejected {} from player {:X} because actor {:X} is unavailable or temporary", pReasonName, apPlayer->GetId(), serverId);
         return false;
     }
 
@@ -686,50 +708,49 @@ bool CharacterService::CanClaimOwnership(Player* apPlayer, const entt::entity aE
     const auto reject = [&](const char* apReason)
     {
         spdlog::debug(
-            "ownership_claim_rejected context={} reason={} player={:X} server_id={:X} expected_epoch={} owner={:X} current_epoch={}", apContext, apReason, apPlayer->GetId(), serverId, aExpectedOwnershipEpoch, currentOwnerId, ownerComponent.OwnershipEpoch);
+            "Rejected {} from player {:X} for actor {:X}: {} (requested epoch {}, current owner {:X}, current epoch {})",
+            pReasonName, apPlayer->GetId(), serverId, apReason, aExpectedOwnershipEpoch, currentOwnerId, ownerComponent.OwnershipEpoch);
         return false;
     };
 
     if (aExpectedOwnershipEpoch == 0 || ownerComponent.OwnershipEpoch != aExpectedOwnershipEpoch)
-        return reject("stale_epoch");
+        return reject("the ownership epoch is stale");
 
     if (!pCurrentOwner || pCurrentOwner == apPlayer)
-        return reject("already_owner");
+        return reject("the player already owns the actor");
 
     if (characterComponent.IsMount() || characterComponent.IsPlayer())
-        return reject("ineligible_actor");
+        return reject("the actor cannot be claimed");
 
     if (!apPlayer->GetCellComponent().IsInRange(cellIdComponent, characterComponent.IsDragon()))
-        return reject("out_of_range");
+        return reject("the actor is out of range");
 
     auto& partyService = m_world.GetPartyService();
     if (!partyService.IsPlayerInParty(apPlayer) || !partyService.IsPlayerLeader(apPlayer))
-        return reject("not_party_leader");
+        return reject("the player is not the party leader");
 
     PartyService::Party* const pParty = partyService.GetPlayerParty(apPlayer);
     if (!pParty || std::find(pParty->Members.begin(), pParty->Members.end(), pCurrentOwner) == pParty->Members.end())
-        return reject("owner_not_in_party");
+        return reject("the current owner is not in the party");
 
     return true;
 }
 
-bool CharacterService::TransferOwnership(Player* apPlayer, const entt::entity aEntity, const char* apReason, const bool aResetInvalidOwners) const noexcept
+bool CharacterService::TransferOwnership(Player* apPlayer, const entt::entity aEntity, const OwnershipTransferReason aReason, const bool aResetInvalidOwners) const noexcept
 {
+    const char* pReasonName = GetOwnershipTransferReasonName(aReason);
     const auto view = m_world.view<OwnerComponent, CharacterComponent, CellIdComponent>();
     const auto it = view.find(aEntity);
     if (!apPlayer || it == view.end())
     {
-        spdlog::debug("ownership_transfer_rejected reason=invalid_target transfer_reason={} server_id={:X}", apReason, World::ToInteger(aEntity));
+        spdlog::warn("Cannot transfer ownership of actor {:X} for {} because the target is invalid", World::ToInteger(aEntity), pReasonName);
         return false;
     }
 
     auto& ownerComponent = view.get<OwnerComponent>(*it);
     Player* const pOldOwner = ownerComponent.GetOwner();
     if (pOldOwner == apPlayer)
-    {
-        spdlog::debug("ownership_transfer_unchanged reason={} server_id={:X} owner={:X} epoch={}", apReason, World::ToInteger(aEntity), apPlayer->GetId(), ownerComponent.OwnershipEpoch);
         return true;
-    }
 
     const uint32_t oldOwnerId = pOldOwner ? pOldOwner->GetId() : 0;
     const uint32_t oldEpoch = ownerComponent.OwnershipEpoch;
@@ -752,18 +773,20 @@ bool CharacterService::TransferOwnership(Player* apPlayer, const entt::entity aE
         spdlog::error("{}: SendToPlayersInRange failed", __FUNCTION__);
 
     spdlog::info(
-        "ownership_transfer reason={} server_id={:X} old_owner={:X} new_owner={:X} old_epoch={} new_epoch={}", apReason, notify.ServerId, oldOwnerId, notify.OwnerPlayerId, oldEpoch, newEpoch);
+        "Transferred ownership of actor {:X} from player {:X} to player {:X} for {} (epoch {} to {})",
+        notify.ServerId, oldOwnerId, notify.OwnerPlayerId, pReasonName, oldEpoch, newEpoch);
 
     return true;
 }
 
-void CharacterService::TransferToNextOwner(const entt::entity aEntity, const char* apReason) const noexcept
+void CharacterService::TransferToNextOwner(const entt::entity aEntity, const OwnershipTransferReason aReason) const noexcept
 {
+    const char* pReasonName = GetOwnershipTransferReasonName(aReason);
     const auto view = m_world.view<OwnerComponent, CharacterComponent, CellIdComponent>();
     const auto it = view.find(aEntity);
     if (it == view.end())
     {
-        spdlog::debug("ownership_transfer_rejected reason=missing_entity transfer_reason={} server_id={:X}", apReason, World::ToInteger(aEntity));
+        spdlog::warn("Cannot select a new owner for actor {:X} after {} because the actor is missing", World::ToInteger(aEntity), pReasonName);
         return;
     }
 
@@ -783,11 +806,11 @@ void CharacterService::TransferToNextOwner(const entt::entity aEntity, const cha
             continue;
 
         // Retain every owner that declined this handoff chain so the actor cannot bounce between unloaded clients.
-        if (TransferOwnership(pPlayer, aEntity, apReason, false))
+        if (TransferOwnership(pPlayer, aEntity, aReason, false))
             return;
     }
 
-    spdlog::info("ownership_transfer reason={} server_id={:X} result=no_eligible_owner", apReason, World::ToInteger(aEntity));
+    spdlog::info("Removing actor {:X} after {} because no eligible owner remains", World::ToInteger(aEntity), pReasonName);
     m_world.GetDispatcher().trigger(CharacterRemoveEvent(World::ToInteger(aEntity)));
 }
 

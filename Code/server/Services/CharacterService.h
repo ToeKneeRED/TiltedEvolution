@@ -39,6 +39,15 @@ struct CharacterService
     static void Serialize(World& aRegistry, entt::entity aEntity, CharacterSpawnRequest* apSpawnRequest) noexcept;
 
 protected:
+    enum class OwnershipTransferReason : uint8_t
+    {
+        LeaderAssignment,
+        LeaderClaim,
+        Mount,
+        Relinquish,
+        OwnerUnavailable
+    };
+
     void OnUpdate(const UpdateEvent& acEvent) const noexcept;
     void OnCharacterExteriorCellChange(const CharacterExteriorCellChangeEvent& acEvent) const noexcept;
     void OnCharacterInteriorCellChange(const CharacterInteriorCellChangeEvent& acEvent) const noexcept;
@@ -59,9 +68,10 @@ protected:
 
     void CreateCharacter(const PacketEvent<AssignCharacterRequest>& acMessage) const noexcept;
     void PopulateAssignmentResponse(entt::entity aEntity, AssignCharacterResponse& aResponse) const noexcept;
-    bool CanClaimOwnership(Player* apPlayer, entt::entity aEntity, uint32_t aExpectedOwnershipEpoch, const char* apContext) const noexcept;
-    bool TransferOwnership(Player* apPlayer, entt::entity aEntity, const char* apReason, bool aResetInvalidOwners = true) const noexcept;
-    void TransferToNextOwner(entt::entity aEntity, const char* apReason) const noexcept;
+    static const char* GetOwnershipTransferReasonName(OwnershipTransferReason aReason) noexcept;
+    bool CanClaimOwnership(Player* apPlayer, entt::entity aEntity, uint32_t aExpectedOwnershipEpoch, OwnershipTransferReason aReason) const noexcept;
+    bool TransferOwnership(Player* apPlayer, entt::entity aEntity, OwnershipTransferReason aReason, bool aResetInvalidOwners = true) const noexcept;
+    void TransferToNextOwner(entt::entity aEntity, OwnershipTransferReason aReason) const noexcept;
     ActorData BuildActorData(const entt::entity acEntity) const noexcept;
 
     void ProcessFactionsChanges() const noexcept;

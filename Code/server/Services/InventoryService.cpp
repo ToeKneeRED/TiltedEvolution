@@ -34,10 +34,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     const auto it = view.find(static_cast<entt::entity>(message.ServerId));
 
     if (it == view.end())
-    {
-        spdlog::debug("inventory_mutation_rejected reason=missing_entity player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
         return;
-    }
 
     bool isRemoteCorpseInteraction = false;
 
@@ -49,7 +46,8 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
         {
             const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
             spdlog::debug(
-                "inventory_mutation_rejected reason=stale_epoch player={:X} server_id={:X} requested_epoch={} owner={:X} current_epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+                "Rejected inventory change from player {:X} for actor {:X} at stale epoch {}; current owner is {:X} at epoch {}",
+                acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
             return;
         }
 
@@ -64,16 +62,16 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
             {
                 const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
                 spdlog::debug(
-                    "inventory_mutation_rejected reason=non_owner player={:X} server_id={:X} epoch={} owner={:X}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId);
+                    "Rejected inventory change from player {:X} for actor {:X} because it is owned by player {:X}", acMessage.pPlayer->GetId(), message.ServerId, ownerId);
                 return;
             }
-
-            spdlog::debug("inventory_mutation_accepted source=remote_corpse player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
         }
     }
     else if (message.OwnershipEpoch != 0)
     {
-        spdlog::debug("inventory_mutation_rejected reason=non_actor_epoch player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        spdlog::warn(
+            "Rejected inventory change from player {:X} because object {:X} unexpectedly carried ownership epoch {}",
+            acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
         return;
     }
 
@@ -104,10 +102,7 @@ void InventoryService::OnEquipmentChanges(const PacketEvent<RequestEquipmentChan
     const auto it = view.find(static_cast<entt::entity>(message.ServerId));
 
     if (it == view.end())
-    {
-        spdlog::debug("equipment_mutation_rejected reason=missing_entity player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
         return;
-    }
 
     const auto* pOwnerComponent = m_world.try_get<OwnerComponent>(*it);
     if (pOwnerComponent)
@@ -116,13 +111,16 @@ void InventoryService::OnEquipmentChanges(const PacketEvent<RequestEquipmentChan
         {
             const uint32_t ownerId = pOwnerComponent->GetOwner() ? pOwnerComponent->GetOwner()->GetId() : 0;
             spdlog::debug(
-                "equipment_mutation_rejected reason=stale_or_non_owner player={:X} server_id={:X} requested_epoch={} owner={:X} current_epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+                "Rejected equipment change from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}",
+                acMessage.pPlayer->GetId(), message.ServerId, ownerId, message.OwnershipEpoch, pOwnerComponent->OwnershipEpoch);
             return;
         }
     }
     else if (message.OwnershipEpoch != 0)
     {
-        spdlog::debug("equipment_mutation_rejected reason=non_actor_epoch player={:X} server_id={:X} epoch={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        spdlog::warn(
+            "Rejected equipment change from player {:X} because object {:X} unexpectedly carried ownership epoch {}",
+            acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
         return;
     }
 

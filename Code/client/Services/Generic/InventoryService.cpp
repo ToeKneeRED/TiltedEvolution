@@ -54,11 +54,7 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     const auto iter = std::find_if(std::begin(view), std::end(view), [view, formId = acEvent.FormId](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
 
     if (iter == std::end(view))
-    {
-        if (acEvent.OwnershipEpoch != 0)
-            spdlog::debug("inventory_event_dropped reason=entity_gone server_id={:X} epoch={}", acEvent.ServerId, acEvent.OwnershipEpoch);
         return;
-    }
 
     uint32_t serverId = 0;
     if (acEvent.OwnershipEpoch != 0)
@@ -77,7 +73,7 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
 
         if (!ownershipMatches)
         {
-            spdlog::debug("inventory_event_dropped reason=ownership_changed server_id={:X} epoch={} remote_interaction={}", acEvent.ServerId, acEvent.OwnershipEpoch, acEvent.IsRemoteActorInteraction);
+            spdlog::debug("Discarded an inventory change for actor {:X} because ownership changed after it was queued (epoch {})", acEvent.ServerId, acEvent.OwnershipEpoch);
             return;
         }
 
@@ -86,15 +82,13 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     else
     {
         if (Cast<Actor>(TESForm::GetById(acEvent.FormId)))
-        {
-            spdlog::debug("inventory_event_dropped reason=actor_without_token form_id={:X}", acEvent.FormId);
             return;
-        }
 
         const std::optional<uint32_t> serverIdRes = Utils::GetServerId(*iter);
         if (!serverIdRes)
         {
-            spdlog::error(__FUNCTION__ ": failed to find server id, target form id: {:X}, item id: {:X}, count: {}", acEvent.FormId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count);
+            spdlog::warn(
+                "Discarded inventory change for form {:X} because it has no server entity (item {:X}, count {})", acEvent.FormId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count);
             return;
         }
         serverId = *serverIdRes;
@@ -122,15 +116,12 @@ void InventoryService::OnEquipmentChangeEvent(const EquipmentChangeEvent& acEven
     const auto iter = std::find_if(std::begin(view), std::end(view), [view, formId = acEvent.ActorId](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
 
     if (iter == std::end(view))
-    {
-        spdlog::debug("equipment_event_dropped reason=entity_gone server_id={:X} epoch={}", acEvent.ServerId, acEvent.OwnershipEpoch);
         return;
-    }
 
     const auto* pLocalComponent = m_world.try_get<LocalComponent>(*iter);
     if (acEvent.OwnershipEpoch == 0 || !pLocalComponent || pLocalComponent->Id != acEvent.ServerId || pLocalComponent->OwnershipEpoch != acEvent.OwnershipEpoch)
     {
-        spdlog::debug("equipment_event_dropped reason=ownership_changed server_id={:X} epoch={}", acEvent.ServerId, acEvent.OwnershipEpoch);
+        spdlog::debug("Discarded an equipment change for actor {:X} because ownership changed after it was queued (epoch {})", acEvent.ServerId, acEvent.OwnershipEpoch);
         return;
     }
 
@@ -166,7 +157,6 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
     if (acMessage.OwnershipEpoch != 0)
     {
         Actor* pActor = nullptr;
-        const char* pAuthority = "remote";
 
         auto remoteView = m_world.view<RemoteComponent, FormIdComponent>(entt::exclude<LocalComponent>);
         const auto remoteIt = std::find_if(remoteView.begin(), remoteView.end(), [remoteView, &acMessage](const entt::entity aEntity)
@@ -187,15 +177,12 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
             });
 
             if (localIt != localView.end())
-            {
                 pActor = Cast<Actor>(TESForm::GetById(localView.get<FormIdComponent>(*localIt).Id));
-                pAuthority = "local";
-            }
         }
 
         if (!pActor)
         {
-            spdlog::debug("inventory_notification_dropped reason=not_matching_actor server_id={:X} epoch={}", acMessage.ServerId, acMessage.OwnershipEpoch);
+            spdlog::debug("Discarded an inventory update for actor {:X} because epoch {} is no longer current", acMessage.ServerId, acMessage.OwnershipEpoch);
             return;
         }
 
@@ -205,8 +192,6 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
             pActor->DropOrPickUpObject(acMessage.Item, nullptr, nullptr);
         else
             pActor->AddOrRemoveItem(acMessage.Item);
-
-        spdlog::debug("inventory_notification_applied authority={} server_id={:X} epoch={}", pAuthority, acMessage.ServerId, acMessage.OwnershipEpoch);
 
         return;
     }
@@ -229,7 +214,7 @@ void InventoryService::OnNotifyEquipmentChanges(const NotifyEquipmentChanges& ac
     });
     if (it == view.end())
     {
-        spdlog::debug("equipment_notification_dropped reason=not_matching_remote server_id={:X} epoch={}", acMessage.ServerId, acMessage.OwnershipEpoch);
+        spdlog::debug("Discarded an equipment update for actor {:X} because epoch {} is no longer current", acMessage.ServerId, acMessage.OwnershipEpoch);
         return;
     }
 

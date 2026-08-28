@@ -150,44 +150,30 @@ void CharacterService::ReconcileActorData(const entt::entity aEntity, Actor* apA
     }
 
     if (!apActor)
-    {
-        spdlog::info("ownership_reconcile server_id={:X} epoch={} result=deferred_no_actor", aServerId, aOwnershipEpoch);
         return;
-    }
 
     apActor->SetActorValues(acActorData.InitialActorValues);
 
-    bool inventoryChanged = false;
     if (aApplyInventory)
     {
         const Inventory currentInventory = apActor->GetActorInventory();
-        inventoryChanged = currentInventory.Entries != acActorData.InitialInventory.Entries || currentInventory.CurrentMagicEquipment != acActorData.InitialInventory.CurrentMagicEquipment;
-        if (inventoryChanged)
+        if (currentInventory.Entries != acActorData.InitialInventory.Entries || currentInventory.CurrentMagicEquipment != acActorData.InitialInventory.CurrentMagicEquipment)
             apActor->SetActorInventory(acActorData.InitialInventory);
     }
 
     if (apActor->IsDead() != acActorData.IsDead)
         acActorData.IsDead ? apActor->Kill() : apActor->Respawn();
 
-    const char* pWeaponState = "queued_remote";
     if (aIsLocalOwner)
     {
         // A remote draw correction may still be queued when an ownership grant arrives.
         m_weaponDrawUpdates.erase(apActor->formID);
 
         if (apActor->actorState.IsWeaponDrawn() != acActorData.IsWeaponDrawn)
-        {
             apActor->SetWeaponDrawnEx(acActorData.IsWeaponDrawn);
-            pWeaponState = "corrected_local";
-        }
-        else
-            pWeaponState = "unchanged_local";
     }
     else
         m_weaponDrawUpdates[apActor->formID] = {acActorData.IsWeaponDrawn};
-
-    spdlog::info(
-        "ownership_reconcile server_id={:X} epoch={} inventory={} weapon={} state=applied", aServerId, aOwnershipEpoch, aApplyInventory ? (inventoryChanged ? "replaced" : "unchanged") : "deferred", pWeaponState);
 }
 
 bool CharacterService::RequestOwnership(const uint32_t aFormId, const uint32_t aServerId, const entt::entity aEntity) const noexcept
@@ -195,20 +181,20 @@ bool CharacterService::RequestOwnership(const uint32_t aFormId, const uint32_t a
     Actor* pActor = Cast<Actor>(TESForm::GetById(aFormId));
     if (!pActor)
     {
-        spdlog::error("Cannot request control over missing actor, form id: {:X}, server id: {:X}", aFormId, aServerId);
+        spdlog::warn("Cannot request ownership of actor {:X} because its form {:X} is unavailable", aServerId, aFormId);
         return false;
     }
 
     ActorExtension* pExtension = pActor->GetExtension();
     if (pExtension->IsRemotePlayer())
     {
-        spdlog::error("Cannot request control over remote player actor, form id: {:X}, server id: {:X}", aFormId, aServerId);
+        spdlog::warn("Cannot request ownership of remote player actor {:X}", aServerId);
         return false;
     }
 
     if (pActor->IsPlayerSummon())
     {
-        spdlog::error("Cannot request control over remote player summon, form id: {:X}, server id: {:X}", aFormId, aServerId);
+        spdlog::warn("Cannot request ownership of remote player summon {:X}", aServerId);
         return false;
     }
 
@@ -222,8 +208,6 @@ bool CharacterService::RequestOwnership(const uint32_t aFormId, const uint32_t a
 
     if (!m_transport.Send(request))
         return false;
-
-    spdlog::info("ownership_claim_requested server_id={:X} form_id={:X} expected_epoch={}", aServerId, aFormId, request.ExpectedOwnershipEpoch);
 
     return true;
 }
@@ -383,13 +367,12 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         if (m_world.valid(cEntity))
             m_world.destroy(cEntity);
 
-        spdlog::info("assignment_cleanup cookie={:X} server_id={:X} owner={} epoch={}", acMessage.Cookie, acMessage.ServerId, acMessage.Owner, acMessage.OwnershipEpoch);
         return;
     }
 
     if (acMessage.OwnershipEpoch == 0)
     {
-        spdlog::error("assignment_rejected reason=unassigned_epoch cookie={:X} server_id={:X}", acMessage.Cookie, acMessage.ServerId);
+        spdlog::warn("Ignored assignment for actor {:X} because the server returned an invalid ownership epoch", acMessage.ServerId);
         return;
     }
 
@@ -402,7 +385,7 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         if (m_world.valid(cEntity))
             m_world.destroy(cEntity);
 
-        spdlog::info("assignment_cleanup reason=form_missing cookie={:X} server_id={:X} owner={} epoch={}", acMessage.Cookie, acMessage.ServerId, acMessage.Owner, acMessage.OwnershipEpoch);
+        spdlog::warn("Discarded assignment for actor {:X} because the local entity no longer has a form", acMessage.ServerId);
         return;
     }
 
@@ -412,7 +395,7 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         if (acMessage.Owner)
             DeclineOwnership(acMessage.ServerId, acMessage.OwnershipEpoch);
 
-        spdlog::info("assignment_cleanup reason=actor_missing cookie={:X} server_id={:X} form_id={:X} owner={} epoch={}", acMessage.Cookie, acMessage.ServerId, formIdComponent->Id, acMessage.Owner, acMessage.OwnershipEpoch);
+        spdlog::warn("Discarded assignment for actor {:X} because form {:X} is unavailable", acMessage.ServerId, formIdComponent->Id);
         m_world.destroy(cEntity);
         return;
     }
@@ -478,7 +461,7 @@ void CharacterService::OnCharacterSpawn(const CharacterSpawnRequest& acMessage) 
 {
     if (acMessage.OwnershipEpoch == 0)
     {
-        spdlog::error("Character spawn rejected for server id {:X}: ownership epoch is unassigned", acMessage.ServerId);
+        spdlog::warn("Ignored spawn for actor {:X} because the ownership epoch is invalid", acMessage.ServerId);
         return;
     }
 
@@ -697,7 +680,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 {
     if (acMessage.OwnershipEpoch == 0)
     {
-        spdlog::debug("ownership_grant_ignored reason=unassigned_epoch server_id={:X}", acMessage.ServerId);
+        spdlog::warn("Ignored ownership update for actor {:X} because the epoch is invalid", acMessage.ServerId);
         return;
     }
 
@@ -713,17 +696,18 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 
     if (currentEpoch != 0 && acMessage.OwnershipEpoch <= currentEpoch)
     {
-        spdlog::debug("ownership_grant_ignored reason=stale server_id={:X} granted_epoch={} current_epoch={}", acMessage.ServerId, acMessage.OwnershipEpoch, currentEpoch);
+        spdlog::debug("Ignored stale ownership update for actor {:X} at epoch {}; current epoch is {}", acMessage.ServerId, acMessage.OwnershipEpoch, currentEpoch);
         return;
     }
 
     const bool isLocalOwner = acMessage.OwnerPlayerId == m_transport.GetLocalPlayerId();
     if (!entity)
     {
+        // A transfer does not contain enough form data to recreate an unknown actor. Decline so the server can try another loaded client.
         if (isLocalOwner)
             DeclineOwnership(acMessage.ServerId, acMessage.OwnershipEpoch);
         else
-            spdlog::debug("ownership_grant_ignored reason=unknown_entity server_id={:X} owner={:X} epoch={}", acMessage.ServerId, acMessage.OwnerPlayerId, acMessage.OwnershipEpoch);
+            spdlog::debug("Ignored ownership update for unknown actor {:X} at epoch {}", acMessage.ServerId, acMessage.OwnershipEpoch);
         return;
     }
 
@@ -748,7 +732,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
             else if (cachedRefId != 0)
                 m_world.emplace<RemoteComponent>(cEntity, acMessage.ServerId, cachedRefId, acMessage.OwnershipEpoch);
 
-            spdlog::info("ownership_grant_declined reason=actor_or_3d_missing server_id={:X} epoch={}", acMessage.ServerId, acMessage.OwnershipEpoch);
+            spdlog::warn("Declined ownership of actor {:X} at epoch {} because the actor is not ready", acMessage.ServerId, acMessage.OwnershipEpoch);
             DeclineOwnership(acMessage.ServerId, acMessage.OwnershipEpoch);
             return;
         }
@@ -769,7 +753,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 
         // LocalComponent is installed only after canonical reconciliation is complete.
         pActor->GetExtension()->SetRemote(false);
-        spdlog::info("ownership_grant_applied server_id={:X} owner={:X} epoch={} authority=local", acMessage.ServerId, acMessage.OwnerPlayerId, acMessage.OwnershipEpoch);
+        spdlog::info("Gained ownership of actor {:X} at epoch {}", acMessage.ServerId, acMessage.OwnershipEpoch);
         return;
     }
 
@@ -794,7 +778,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 
     ReconcileActorData(cEntity, pActor, acMessage.ServerId, acMessage.OwnershipEpoch, acMessage.CurrentActorData, pActor && pActor->GetNiNode(), false);
 
-    spdlog::info("ownership_grant_applied server_id={:X} owner={:X} epoch={} authority=remote", acMessage.ServerId, acMessage.OwnerPlayerId, acMessage.OwnershipEpoch);
+    spdlog::info("Actor {:X} is now owned by player {:X} at epoch {}", acMessage.ServerId, acMessage.OwnerPlayerId, acMessage.OwnershipEpoch);
 }
 
 void CharacterService::OnRemoveCharacter(const NotifyRemoveCharacter& acMessage) const noexcept
@@ -901,10 +885,7 @@ void CharacterService::OnMountEvent(const MountEvent& acEvent) const noexcept
     const entt::entity cRiderEntity = *riderIt;
     const auto* pRiderLocalComponent = m_world.try_get<LocalComponent>(cRiderEntity);
     if (!pRiderLocalComponent)
-    {
-        spdlog::debug("mount_event_dropped reason=rider_not_local rider_form_id={:X}", acEvent.RiderID);
         return;
-    }
 
     const auto mountIt = std::find_if(std::begin(view), std::end(view), [id = acEvent.MountID, view](auto entity) { return view.get<FormIdComponent>(entity).Id == id; });
 
@@ -929,10 +910,7 @@ void CharacterService::OnMountEvent(const MountEvent& acEvent) const noexcept
         mountOwnershipEpoch = pMountRemoteComponent->OwnershipEpoch;
     }
     else
-    {
-        spdlog::debug("mount_event_dropped reason=mount_unassigned mount_form_id={:X}", acEvent.MountID);
         return;
-    }
 
     MountRequest request{};
     request.RiderId = pRiderLocalComponent->Id;
@@ -964,7 +942,7 @@ void CharacterService::OnNotifyMount(const NotifyMount& acMessage) const noexcep
     const auto mountIt = std::find_if(std::begin(remoteView), std::end(remoteView), [remoteView, Id = acMessage.MountId](auto entity) { return remoteView.get<RemoteComponent>(entity).Id == Id; });
     if (mountIt == std::end(remoteView))
     {
-        spdlog::warn("Mount with remote id {:X} not found.", acMessage.MountId);
+        spdlog::warn("Cannot apply mount update because mount {:X} is unavailable", acMessage.MountId);
         return;
     }
 
@@ -1416,7 +1394,6 @@ void CharacterService::CancelServerAssignment(const entt::entity aEntity, const 
     {
         auto& waitingComponent = m_world.get<WaitingForAssignmentComponent>(aEntity);
         waitingComponent.Cancelled = true;
-        spdlog::info("assignment_cancelled_locally cookie={:X} entity={:X}", waitingComponent.Cookie, to_integral(aEntity));
         return;
     }
 
@@ -1626,7 +1603,7 @@ void CharacterService::RunRemoteUpdates() noexcept
 
     auto waitingView = m_world.view<FormIdComponent, WaitingFor3D>();
 
-    Vector<entt::entity> toRemove;
+    Vector<entt::entity> readyEntities;
     for (auto entity : waitingView)
     {
         auto& formIdComponent = waitingView.get<FormIdComponent>(entity);
@@ -1654,14 +1631,16 @@ void CharacterService::RunRemoteUpdates() noexcept
         if (pActor->IsVampireLord())
             pActor->FixVampireLordModel();
 
-        toRemove.push_back(entity);
+        readyEntities.push_back(entity);
 
         spdlog::info("Applied 3D for actor, form id: {:X}", pActor->formID);
     }
 
-    for (auto entity : toRemove)
+    for (auto entity : readyEntities)
     {
         m_world.remove<WaitingFor3D>(entity);
+
+        // Reprocess the remote actor now that an ownership grant can be accepted without immediately declining it.
         ProcessNewEntity(entity);
     }
 }
