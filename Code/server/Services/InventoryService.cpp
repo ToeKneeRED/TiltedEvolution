@@ -36,7 +36,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     if (it == view.end())
         return;
 
-    bool isRemoteCorpseInteraction = false;
+    bool isRemoteNpcInteraction = false;
 
     const auto* pOwnerComponent = m_world.try_get<OwnerComponent>(*it);
     if (pOwnerComponent)
@@ -55,10 +55,13 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
         {
             const auto* pCharacterComponent = m_world.try_get<CharacterComponent>(*it);
             const auto* pCellComponent = m_world.try_get<CellIdComponent>(*it);
-            isRemoteCorpseInteraction = pOwner && pCharacterComponent && pCellComponent && pCharacterComponent->IsDead() && !pCharacterComponent->IsPlayer()
+            // A non-owner may still change an NPC's inventory through normal gameplay interactions
+            // such as pickpocketing or looting. The epoch and range checks keep the interaction tied
+            // to the currently visible incarnation of that NPC.
+            isRemoteNpcInteraction = pOwner && pCharacterComponent && pCellComponent && !pCharacterComponent->IsPlayer()
                 && acMessage.pPlayer->GetCellComponent().IsInRange(*pCellComponent, pCharacterComponent->IsDragon());
 
-            if (!isRemoteCorpseInteraction)
+            if (!isRemoteNpcInteraction)
             {
                 const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
                 spdlog::debug(
@@ -78,7 +81,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     auto& inventoryComponent = view.get<InventoryComponent>(*it);
     inventoryComponent.Content.AddOrRemoveEntry(message.Item);
 
-    if (!message.UpdateClients && !isRemoteCorpseInteraction)
+    if (!message.UpdateClients && !isRemoteNpcInteraction)
         return;
 
     NotifyInventoryChanges notify;
@@ -86,7 +89,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     notify.OwnershipEpoch = message.OwnershipEpoch;
     notify.Item = message.Item;
 
-    notify.Drop = bEnableItemDrops && !isRemoteCorpseInteraction ? message.Drop : false;
+    notify.Drop = bEnableItemDrops && !isRemoteNpcInteraction ? message.Drop : false;
 
     const entt::entity cOrigin = static_cast<entt::entity>(message.ServerId);
     if (!GameServer::Get()->SendToPlayersInRange(notify, cOrigin, acMessage.GetSender()))
