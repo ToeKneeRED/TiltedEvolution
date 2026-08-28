@@ -769,8 +769,12 @@ bool CharacterService::TransferOwnership(Player* apPlayer, const entt::entity aE
     if (aResetInvalidOwners)
         ownerComponent.InvalidOwners.clear();
 
-    if (!GameServer::Get()->SendToPlayersInRange(notify, aEntity))
-        spdlog::error("{}: SendToPlayersInRange failed", __FUNCTION__);
+    if (!GameServer::Get()->SendToPlayersInRange(notify, aEntity, pOldOwner))
+        spdlog::error("Failed to broadcast ownership transfer for actor {:X}", notify.ServerId);
+
+    // The former owner may already be out of range, so notify it directly as well.
+    if (pOldOwner)
+        pOldOwner->Send(notify);
 
     spdlog::info(
         "Transferred ownership of actor {:X} from player {:X} to player {:X} for {} (epoch {} to {})",
