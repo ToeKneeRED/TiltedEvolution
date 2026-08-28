@@ -1,5 +1,4 @@
 #pragma once
-#include <optional>
 #include "Structs/Inventory.h"
 #include "Structs/ActorData.h"
 
@@ -94,9 +93,8 @@ private:
     void RequestServerAssignment(entt::entity aEntity) const noexcept;
     void CancelServerAssignment(entt::entity aEntity, uint32_t aFormId) const noexcept;
     void DeleteRemoteEntityComponents(entt::entity aEntity) const noexcept;
-    std::optional<entt::entity> FindEntityByServerId(uint32_t aServerId) const noexcept;
     void DeclineOwnership(uint32_t aServerId, uint32_t aOwnershipEpoch) const noexcept;
-    void ReconcileActorData(entt::entity aEntity, Actor* apActor, uint32_t aServerId, uint32_t aOwnershipEpoch, const ActorData& acActorData, bool aApplyInventory, bool aIsLocalOwner) noexcept;
+    void ReconcileActorData(entt::entity aEntity, Actor* apActor, uint32_t aOwnershipEpoch, const ActorData& acActorData, bool aApplyInventory, bool aIsLocalOwner) noexcept;
 
     Actor* CreateCharacterForEntity(entt::entity aEntity) const noexcept;
     ActorData BuildActorData(Actor* apActor) const noexcept;

@@ -113,32 +113,16 @@ void CharacterService::DeleteRemoteEntityComponents(entt::entity aEntity) const 
     m_world.remove<FaceGenComponent, InterpolationComponent, RemoteAnimationComponent, RemoteComponent, CacheComponent, WaitingFor3D, PlayerComponent>(aEntity);
 }
 
-std::optional<entt::entity> CharacterService::FindEntityByServerId(const uint32_t aServerId) const noexcept
-{
-    const auto localView = m_world.view<LocalComponent>();
-    const auto localIt = std::find_if(localView.begin(), localView.end(), [localView, aServerId](const entt::entity aEntity) { return localView.get<LocalComponent>(aEntity).Id == aServerId; });
-    if (localIt != localView.end())
-        return *localIt;
-
-    const auto remoteView = m_world.view<RemoteComponent>();
-    const auto remoteIt = std::find_if(remoteView.begin(), remoteView.end(), [remoteView, aServerId](const entt::entity aEntity) { return remoteView.get<RemoteComponent>(aEntity).Id == aServerId; });
-    if (remoteIt != remoteView.end())
-        return *remoteIt;
-
-    return std::nullopt;
-}
-
 void CharacterService::DeclineOwnership(const uint32_t aServerId, const uint32_t aOwnershipEpoch) const noexcept
 {
     RequestOwnershipTransfer request{};
     request.ServerId = aServerId;
     request.OwnershipEpoch = aOwnershipEpoch;
     m_transport.Send(request);
-
-    spdlog::info("ownership_declined server_id={:X} epoch={}", aServerId, aOwnershipEpoch);
 }
 
-void CharacterService::ReconcileActorData(const entt::entity aEntity, Actor* apActor, const uint32_t aServerId, const uint32_t aOwnershipEpoch, const ActorData& acActorData, const bool aApplyInventory, const bool aIsLocalOwner) noexcept
+void CharacterService::ReconcileActorData(
+    const entt::entity aEntity, Actor* apActor, const uint32_t aOwnershipEpoch, const ActorData& acActorData, const bool aApplyInventory, const bool aIsLocalOwner) noexcept
 {
     if (auto* pWaitingFor3D = m_world.try_get<WaitingFor3D>(aEntity))
     {
@@ -416,7 +400,7 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         spdlog::info("Received local actor, form id: {:X}", pActor->formID);
 
         pActor->GetExtension()->SetRemote(true);
-        ReconcileActorData(cEntity, pActor, acMessage.ServerId, acMessage.OwnershipEpoch, actorData, true, true);
+        ReconcileActorData(cEntity, pActor, acMessage.OwnershipEpoch, actorData, true, true);
 
         auto& localAnimationComponent = m_world.emplace_or_replace<LocalAnimationComponent>(cEntity);
 
@@ -451,7 +435,7 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         m_world.emplace_or_replace<ReplayedActionsDebugComponent>(cEntity, acMessage.ActionsToReplay);
 #endif
 
-        ReconcileActorData(cEntity, pActor, acMessage.ServerId, acMessage.OwnershipEpoch, actorData, true, false);
+        ReconcileActorData(cEntity, pActor, acMessage.OwnershipEpoch, actorData, true, false);
 
         MoveActor(pActor, acMessage.WorldSpaceId, acMessage.CellId, acMessage.Position);
     }
@@ -684,7 +668,10 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
         return;
     }
 
-    const auto entity = FindEntityByServerId(acMessage.ServerId);
+    auto entity = Utils::FindEntityByServerId(acMessage.ServerId);
+    if (entity && !m_world.any_of<LocalComponent, RemoteComponent>(*entity))
+        entity.reset();
+
     uint32_t currentEpoch = 0;
     if (entity)
     {
@@ -742,7 +729,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
         m_world.remove<LocalAnimationComponent, LocalComponent>(cEntity);
         m_world.emplace_or_replace<RemoteComponent>(cEntity, acMessage.ServerId, pFormIdComponent->Id, acMessage.OwnershipEpoch);
 
-        ReconcileActorData(cEntity, pActor, acMessage.ServerId, acMessage.OwnershipEpoch, acMessage.CurrentActorData, true, true);
+        ReconcileActorData(cEntity, pActor, acMessage.OwnershipEpoch, acMessage.CurrentActorData, true, true);
 
         DeleteRemoteEntityComponents(cEntity);
         CacheSystem::Setup(m_world, cEntity, pActor);
@@ -776,7 +763,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
         pRemoteComponent->OwnershipEpoch = acMessage.OwnershipEpoch;
     }
 
-    ReconcileActorData(cEntity, pActor, acMessage.ServerId, acMessage.OwnershipEpoch, acMessage.CurrentActorData, pActor && pActor->GetNiNode(), false);
+    ReconcileActorData(cEntity, pActor, acMessage.OwnershipEpoch, acMessage.CurrentActorData, pActor && pActor->GetNiNode(), false);
 
     spdlog::info("Actor {:X} is now owned by player {:X} at epoch {}", acMessage.ServerId, acMessage.OwnerPlayerId, acMessage.OwnershipEpoch);
 }

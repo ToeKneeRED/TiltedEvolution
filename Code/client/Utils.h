@@ -34,30 +34,20 @@ static void Assert(const char* apExpression, const char* apMessage)
 }
 
 std::optional<uint32_t> GetServerId(entt::entity aEntity) noexcept;
+std::optional<entt::entity> FindEntityByServerId(uint32_t aServerId) noexcept;
 std::optional<ActorOwnershipToken> GetLocalOwnershipToken(uint32_t aFormId) noexcept;
 std::optional<ActorOwnershipToken> GetRemoteOwnershipToken(uint32_t aFormId) noexcept;
 
 template <class T> T* GetByServerId(const uint32_t acServerId) noexcept
 {
-    auto view = World::Get().view<FormIdComponent>();
-
-    for (entt::entity entity : view)
+    if (const auto entity = FindEntityByServerId(acServerId))
     {
-        std::optional<uint32_t> serverIdRes = GetServerId(entity);
-        if (!serverIdRes.has_value())
-            continue;
-
-        uint32_t serverId = serverIdRes.value();
-
-        if (serverId == acServerId)
+        if (const auto* pFormIdComponent = World::Get().try_get<FormIdComponent>(*entity))
         {
-            const auto& formIdComponent = view.get<FormIdComponent>(entity);
-            TESForm* pForm = TESForm::GetById(formIdComponent.Id);
+            TESForm* pForm = TESForm::GetById(pFormIdComponent->Id);
 
-            if (pForm != nullptr)
-            {
+            if (pForm)
                 return Cast<T>(pForm);
-            }
         }
     }
 
