@@ -37,5 +37,4 @@ struct InventoryChangeEvent
     Inventory::Entry Item{};
     bool Drop = false;
     bool UpdateClients = true;
-    bool IsRemoteActorInteraction = false;
 };

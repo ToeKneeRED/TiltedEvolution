@@ -59,17 +59,10 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     uint32_t serverId = 0;
     if (acEvent.OwnershipEpoch != 0)
     {
-        bool ownershipMatches = false;
-        if (acEvent.IsRemoteActorInteraction)
-        {
-            const auto* pRemoteComponent = m_world.try_get<RemoteComponent>(*iter);
-            ownershipMatches = pRemoteComponent && pRemoteComponent->Id == acEvent.ServerId && pRemoteComponent->OwnershipEpoch == acEvent.OwnershipEpoch;
-        }
-        else
-        {
-            const auto* pLocalComponent = m_world.try_get<LocalComponent>(*iter);
-            ownershipMatches = pLocalComponent && pLocalComponent->Id == acEvent.ServerId && pLocalComponent->OwnershipEpoch == acEvent.OwnershipEpoch;
-        }
+        const auto* pLocalComponent = m_world.try_get<LocalComponent>(*iter);
+        const auto* pRemoteComponent = m_world.try_get<RemoteComponent>(*iter);
+        const bool ownershipMatches = (pLocalComponent && pLocalComponent->Id == acEvent.ServerId && pLocalComponent->OwnershipEpoch == acEvent.OwnershipEpoch)
+            || (pRemoteComponent && pRemoteComponent->Id == acEvent.ServerId && pRemoteComponent->OwnershipEpoch == acEvent.OwnershipEpoch);
 
         if (!ownershipMatches)
         {

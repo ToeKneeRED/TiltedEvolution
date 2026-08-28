@@ -45,10 +45,7 @@ void QueueReferenceInventoryChange(TESObjectREFR* apReference, InventoryChangeEv
     {
         auto ownershipToken = Utils::GetLocalOwnershipToken(pActor->formID);
         if (!ownershipToken && apTransferReference == PlayerCharacter::Get())
-        {
             ownershipToken = Utils::GetRemoteOwnershipToken(pActor->formID);
-            aEvent.IsRemoteActorInteraction = ownershipToken.has_value();
-        }
 
         if (!ownershipToken)
             return;
