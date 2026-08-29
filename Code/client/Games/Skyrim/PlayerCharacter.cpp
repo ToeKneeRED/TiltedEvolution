@@ -180,7 +180,14 @@ char TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject
     // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
     bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
 
-    World::Get().GetRunner().Trigger(InventoryChangeEvent(apThis->formID, std::move(item), false, shouldUpdateClients));
+    // The player still needs its server entity and ownership epoch so stale inventory events can be rejected.
+    if (const auto ownershipToken = Utils::GetLocalOwnershipToken(apThis->formID))
+    {
+        InventoryChangeEvent event(apThis->formID, std::move(item), false, shouldUpdateClients);
+        event.ServerId = ownershipToken->ServerId;
+        event.OwnershipEpoch = ownershipToken->OwnershipEpoch;
+        World::Get().GetRunner().Trigger(std::move(event));
+    }
 
     ScopedInventoryOverride _;
 
